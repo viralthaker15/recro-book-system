@@ -1,29 +1,52 @@
+import { makeExecutableSchema } from '@graphql-tools/schema';
 import { ApolloServer } from 'apollo-server';
-import dotEnv from 'dotenv';
-import jwt from 'jsonwebtoken';
-import { resolvers } from './resolvers';
-import { typeDefs } from './schema';
-dotEnv.config();
+import {
+  AuthenticationError as ApolloAuthenticationError,
+  ForbiddenError as ApolloForbiddenError,
+  UserInputError as ApolloUserInputError,
+} from 'apollo-server-core';
+import { AuthenticationError, ForbiddenError, UserInputError } from './errors';
+import { authDirective } from './graphql/directives';
+import { resolvers } from './graphql/resolvers';
+import { typeDefs } from './graphql/schema';
+import { getUserMiddleware, validationMiddleware } from './middlewares';
+import { ContextType, UserType } from './type.def';
 
-const JWT_SECRET = process.env.JWT_SECRET;
+/* === Middlewares registered through Context === */
+const context = async ({ req }): Promise<ContextType> => {
+  /* === get user using token === */
+  const token = req.headers.authorization || '';
+  const user = (await getUserMiddleware(
+    token.replace('Bearer ', ''),
+  )) as UserType;
 
-/* === verify incoming request token === */
-const getUser = (token: string) => {
-  try {
-    if (token) return jwt.verify(token, JWT_SECRET);
-    return null;
-  } catch (err) {
-    return null;
-  }
+  return { user, validateInput: validationMiddleware };
 };
 
-const server = new ApolloServer({
-  typeDefs,
+const { authDirectiveTypeDefs, authDirectiveTransformer } =
+  authDirective('auth');
+
+/* === defining GraphQL schema + @auth schema === */
+const schema = makeExecutableSchema({
+  typeDefs: [typeDefs, authDirectiveTypeDefs],
   resolvers,
-  context: ({ req }) => {
-    const token = req.headers.authorization || '';
-    const user = getUser(token.replace('Bearer ', '')) as { userId?: Number };
-    return { userId: user?.userId };
+});
+
+/* === Attaching schema with directives === */
+const schemaWithDirectives = authDirectiveTransformer(schema);
+
+const server = new ApolloServer({
+  schema: schemaWithDirectives,
+  context,
+  formatError: (err) => {
+    if (err.originalError instanceof ApolloAuthenticationError) {
+      return new AuthenticationError(err.message);
+    } else if (err.originalError instanceof ApolloForbiddenError) {
+      return new ForbiddenError(err.message);
+    } else if (err.originalError instanceof ApolloUserInputError) {
+      return new UserInputError(err.message);
+    }
+    return err;
   },
 });
 
