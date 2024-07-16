@@ -26,7 +26,21 @@ const getToken = (user: UserType) => {
 
 export const resolvers = {
   Query: {
-    getBooks: async () => await prisma.book.findMany(),
+    getBooks: async (_: any, { page = 1, limit = 10, search = '' }) => {
+      const books = await prisma.book.findMany({
+        where: search
+          ? {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' } },
+                { author: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {},
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+      return books;
+    },
     getBook: async (_: any, args: { id: string }) => {
       const book = await prisma.book.findUnique({
         where: { id: Number(args.id) },
@@ -34,8 +48,13 @@ export const resolvers = {
       if (!book) throw new ResourceNotFoundError('No book found');
       return book;
     },
-    getReviews: async (_: any, args: { bookId: string }) =>
-      await prisma.review.findMany({ where: { bookId: Number(args.bookId) } }),
+    getReviews: async (_: any, { bookId, page = 1, limit = 10 }) => {
+      return await prisma.review.findMany({
+        where: { bookId: Number(bookId) },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+    },
     getMyReviews: async (_: any, __: any, context: ContextType) => {
       checkAuth(context);
       const reviews = await prisma.review.findMany({

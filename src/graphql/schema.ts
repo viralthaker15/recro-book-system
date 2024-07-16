@@ -28,9 +28,9 @@ export const typeDefs = gql`
   }
 
   type Query {
-    getBooks: [Book!]!
+    getBooks(page: Int, limit: Int, search: String): [Book!]!
     getBook(id: ID!): Book
-    getReviews(bookId: ID!): [Review!]!
+    getReviews(bookId: ID!, page: Int, limit: Int): [Review!]!
     getMyReviews: [Review!]! @auth
   }
 
