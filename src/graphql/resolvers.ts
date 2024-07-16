@@ -9,6 +9,7 @@ import { RegisterInput, validateInput } from 'src/validators';
 const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 /* === check if user is authenticated === */
 /*
@@ -19,9 +20,12 @@ const checkAuth = (context: ContextType) => {
   if (!context.user) throw new AuthenticationError('Not authenticated');
 };
 
-const getToken = (user: UserType) => {
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET);
-  return { token, user };
+const generateTokens = (user: UserType) => {
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = jwt.sign({ userId: user.id }, JWT_REFRESH_SECRET, {
+    expiresIn: '7d',
+  });
+  return { token, refreshToken, user };
 };
 
 export const resolvers = {
@@ -64,6 +68,24 @@ export const resolvers = {
     },
   },
   Mutation: {
+    refreshToken: async (_: any, { token }: { token: string }) => {
+      try {
+        const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as {
+          userId: number;
+        };
+        let user = null;
+        if (decoded)
+          user = await prisma.user.findUnique({
+            where: { id: decoded.userId },
+          });
+        if (!user) {
+          throw new AuthenticationError('User not found');
+        }
+        return generateTokens(user);
+      } catch (err) {
+        throw new AuthenticationError('Invalid refresh token');
+      }
+    },
     register: async (
       _: any,
       args: { username: string; email: string; password: string },
@@ -83,7 +105,7 @@ export const resolvers = {
       const password = await bcrypt.hash(args.password, 10);
 
       const user = await prisma.user.create({ data: { ...args, password } });
-      return getToken(user);
+      return generateTokens(user);
     },
     login: async (_: any, args: { email: string; password: string }) => {
       const user = await prisma.user.findUnique({
@@ -92,7 +114,7 @@ export const resolvers = {
       if (!user) throw new ResourceNotFoundError('No user found');
       const valid = await bcrypt.compare(args.password, user.password);
       if (!valid) throw new Error('Invalid password');
-      return getToken(user);
+      return generateTokens(user);
     },
     addBook: async (
       _: any,

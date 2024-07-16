@@ -16,6 +16,7 @@ import { ContextType, UserType } from './type.def';
 const context = async ({ req }): Promise<ContextType> => {
   /* === get user using token === */
   const token = req.headers.authorization || '';
+  console.log(token.replace('Bearer ', ''));
   const user = (await getUserMiddleware(
     token.replace('Bearer ', ''),
   )) as UserType;

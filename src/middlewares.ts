@@ -19,10 +19,10 @@ const validationMiddleware = async (inputClass: any, args: any) => {
 const getUserMiddleware = async (token: string) => {
   try {
     let user = null;
-    let userId = null;
-    if (token) userId = jwt.verify(token, JWT_SECRET);
-    if (userId)
-      user = await prisma.user.findUnique({ where: { id: userId.userId } });
+    let decoded = null;
+    if (token) decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded)
+      user = await prisma.user.findUnique({ where: { id: decoded.userId } });
     return user;
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {
@@ -30,7 +30,6 @@ const getUserMiddleware = async (token: string) => {
     } else if (err instanceof jwt.JsonWebTokenError) {
       throw new Error('Invalid Token');
     }
-
     return null;
   }
 };

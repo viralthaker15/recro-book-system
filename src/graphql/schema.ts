@@ -35,6 +35,7 @@ export const typeDefs = gql`
   }
 
   type Mutation {
+    refreshToken: AuthPayload!
     register(username: String!, email: String!, password: String!): AuthPayload!
     login(email: String!, password: String!): AuthPayload!
     addBook(title: String!, author: String!, publishedYear: Int!): Book! @auth
@@ -45,6 +46,7 @@ export const typeDefs = gql`
 
   type AuthPayload {
     token: String!
+    refreshToken: String!
     user: User!
   }
 `;
